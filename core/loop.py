@@ -13,7 +13,8 @@ from .config import (
 from .context import ContextManager
 from .memory import MEMORY
 from .skill import SKILL_LOADER
-from ..tools.registry import TOOLS, execute_tool
+from ..tools.parallel_executor import execute_tools_parallel
+from ..tools.registry import TOOLS
 
 
 logger = logging.getLogger(__name__)
@@ -87,21 +88,26 @@ def _block_value(block: Any, field: str, default: Any = None) -> Any:
 
 
 def _execute_tool_calls(blocks: Any) -> list[dict[str, Any]]:
-    results = []
-    for block in blocks or ():
-        if _block_value(block, "type") != "tool_use":
-            continue
+    tool_blocks = [block for block in blocks or () if _block_value(block, "type") == "tool_use"]
+    executables = []
+    for block in tool_blocks:
         executable = block
         if isinstance(block, dict):
             from types import SimpleNamespace
 
             executable = SimpleNamespace(name=block.get("name"), input=block.get("input"))
-        results.append({
+        executables.append(executable)
+
+    # 一轮多个工具调用彼此独立，交给线程池并行执行，结果顺序与调用一致。
+    contents = execute_tools_parallel(executables)
+    return [
+        {
             "type": "tool_result",
             "tool_use_id": _block_value(block, "id", "missing-id"),
-            "content": execute_tool(executable),
-        })
-    return results
+            "content": content,
+        }
+        for block, content in zip(tool_blocks, contents)
+    ]
 
 
 def agent_turn(context: ContextManager, *, max_steps: int = AGENT_MAX_STEPS) -> None:

@@ -16,10 +16,11 @@ SimonAgent 基于模型原生工具调用协议自主构建，完整实现模型
 | 双层上下文治理 | 本地滑动窗口控制即时体积，LLM 压缩把旧信息沉淀为长期记忆 |
 | 记忆提交边界 | 长期记忆、用户画像、情景记忆统一提交；失败时保留完整对话并尽力恢复旧文件 |
 | 声明式工具系统 | 工具元数据、JSON Schema、处理函数集中声明，注册即暴露给模型 |
+| 并发工具执行 | 单轮多个 `tool_use` 由线程池并行执行，结果按原顺序回填 |
 | 按需加载 Skill | 启动时只展示技能摘要，需要时才把完整工作流注入模型上下文 |
 | 可观测且默认脱敏 | 工具调用进入内存环形缓冲和 JSONL 日志，常见敏感字段自动隐藏 |
 | 面向本地使用的安全边界 | 无任意命令执行；网页访问限制公网地址；项目读取主动排除密钥和记忆数据 |
-| 可离线验证 | 73 项单元测试覆盖循环、上下文、记忆、会话、工具协议和主要安全分支 |
+| 可离线验证 | 81 项单元测试覆盖循环、上下文、记忆、会话、工具协议和主要安全分支 |
 
 ## 技术定位与当前边界
 
@@ -56,7 +57,7 @@ flowchart LR
 1. `AgentRunner` 接收输入并建立本轮回滚点；
 2. `ContextManager` 写入用户消息并在需要时裁剪旧轮次；
 3. 模型决定直接回答还是返回一个或多个 `tool_use`；
-4. `Tool Registry` 校验参数、执行工具并记录 Trace；
+4. `Tool Registry` 校验参数、执行工具并记录 Trace；同一轮多个 `tool_use` 由线程池并行执行；
 5. 工具结果以标准 `tool_result` 回到上下文，模型继续判断；
 6. 正常结束后检查是否需要压缩记忆，并原子保存当前 Session。
 
@@ -80,6 +81,7 @@ SimonAgent/
 │   └── exceptions.py              # 核心异常体系
 ├── tools/
 │   ├── base.py                    # 不可变工具定义
+│   ├── parallel_executor.py       # 线程池并行执行多个工具调用
 │   ├── registry.py                # 声明、参数校验、执行与 Trace
 │   ├── trace.py                   # 内存环形缓冲 + JSONL 日志
 │   └── builtin/
@@ -244,6 +246,7 @@ python -m SimonAgent.agent
 | `AGENT_CONTEXT_MAX_MESSAGES` | `40` | 上下文最大消息数 |
 | `AGENT_CONTEXT_MAX_TOKENS` | `12000` | 上下文近似 Token 预算 |
 | `AGENT_TOOL_RESULT_MAX_CHARS` | `3000` | 单条工具结果保留长度 |
+| `AGENT_TOOL_MAX_WORKERS` | `4` | 并行执行多个工具调用时的线程数 |
 | `AGENT_MEMORY_COMPACT_AFTER` | `18` | 触发 LLM 压缩的消息数 |
 | `AGENT_MEMORY_COMPACT_AFTER_TOKENS` | `8000` | 触发 LLM 压缩的近似 Token 数 |
 | `AGENT_RECENT_MESSAGES` | `10` | 压缩后期望保留的近期消息数 |
@@ -298,7 +301,7 @@ AGENT_SOUL_FILE=SOUL_custom.md
 python -m unittest discover -s SimonAgent/tests -t .
 ```
 
-当前共 73 项，主要覆盖：
+当前共 81 项，主要覆盖：
 
 - Agent 直接回复、工具调用、工具配对和步数上限；
 - 上下文轮次、消息数、近似 Token、压缩边界和回滚；
@@ -306,6 +309,7 @@ python -m unittest discover -s SimonAgent/tests -t .
 - 会话隔离、前缀切换、损坏文件和路径穿越；
 - 工具 Schema、参数类型、未知参数和导入循环；
 - 计算器白名单、网页访问限制、项目文件边界；
+- 工具并行执行的顺序保持、错误降级和异步封装；
 - Trace 环形缓冲、持久化和敏感字段脱敏。
 
 ## 安全与能力边界
@@ -323,7 +327,7 @@ python -m unittest discover -s SimonAgent/tests -t .
 - 抽象模型 Provider，支持不同工具调用协议；
 - 增加真正的 RAG 检索工具，并用召回评测验证效果；
 - 将 Session 与 Memory 替换为数据库或 Redis 存储；
-- 增加异步工具调度、超时预算和取消机制；
+- 为并发工具调度增加超时预算和取消机制；
 - 引入结构化日志、评测集和持续集成。
 
 SimonAgent 以可审计、低耦合和明确运行边界为设计原则，在有限规模内形成了具备工具编排、状态治理、持久化与可观测能力的 Agent 核心实现。

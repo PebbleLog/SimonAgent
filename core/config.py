@@ -63,6 +63,7 @@ class AgentSettings:
     context_max_messages: int
     context_max_tokens: int
     tool_result_max_chars: int
+    tool_max_workers: int
     compact_after_messages: int
     compact_after_tokens: int
     recent_messages: int
@@ -77,6 +78,7 @@ class AgentSettings:
             context_max_messages=_positive_int("AGENT_CONTEXT_MAX_MESSAGES", 40),
             context_max_tokens=_positive_int("AGENT_CONTEXT_MAX_TOKENS", 12_000),
             tool_result_max_chars=_positive_int("AGENT_TOOL_RESULT_MAX_CHARS", 3_000),
+            tool_max_workers=_positive_int("AGENT_TOOL_MAX_WORKERS", 4),
             compact_after_messages=_positive_int("AGENT_MEMORY_COMPACT_AFTER", 18),
             compact_after_tokens=_positive_int("AGENT_MEMORY_COMPACT_AFTER_TOKENS", 8_000),
             recent_messages=_positive_int("AGENT_RECENT_MESSAGES", 10),
@@ -136,6 +138,7 @@ MAX_TURNS = SETTINGS.max_turns
 CONTEXT_MAX_MESSAGES = SETTINGS.context_max_messages
 CONTEXT_MAX_TOKENS = SETTINGS.context_max_tokens
 TOOL_RESULT_MAX_CHARS = SETTINGS.tool_result_max_chars
+TOOL_MAX_WORKERS = SETTINGS.tool_max_workers
 COMPACT_AFTER_MESSAGES = SETTINGS.compact_after_messages
 COMPACT_AFTER_TOKENS = SETTINGS.compact_after_tokens
 RECENT_MESSAGES = SETTINGS.recent_messages
